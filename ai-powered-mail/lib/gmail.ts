@@ -53,8 +53,9 @@ export async function fetchEmails(
   accessToken: string,
   filter: MailFilter = {},
   maxResults: number = 20,
-  labelIds: string[] = ["INBOX"]
-): Promise<Email[]> {
+  labelIds: string[] = ["INBOX"],
+  pageToken?: string
+): Promise<{ emails: Email[]; nextPageToken?: string }> {
   const gmail = getGmailClient(accessToken);
   const q = buildQuery(filter);
 
@@ -63,6 +64,7 @@ export async function fetchEmails(
     maxResults,
     labelIds: q ? undefined : labelIds,
     q: q || undefined,
+    pageToken: pageToken || undefined,
   });
 
   const messages = listRes.data.messages || [];
@@ -90,7 +92,7 @@ export async function fetchEmails(
     })
   );
 
-  return emails;
+  return { emails, nextPageToken: listRes.data.nextPageToken ?? undefined };
 }
 
 export async function fetchEmailById(accessToken: string, emailId: string): Promise<Email> {
@@ -152,6 +154,75 @@ export async function sendEmail(
   });
 
   return { id: res.data.id! };
+}
+
+export async function watchMailbox(
+  accessToken: string,
+  topicName: string
+): Promise<{ historyId: string; expiration: string }> {
+  const gmail = getGmailClient(accessToken);
+  const res = await gmail.users.watch({
+    userId: "me",
+    requestBody: {
+      topicName,
+      labelIds: ["INBOX"],
+    },
+  });
+  return {
+    historyId: res.data.historyId!,
+    expiration: res.data.expiration!,
+  };
+}
+
+export async function stopWatch(accessToken: string): Promise<void> {
+  const gmail = getGmailClient(accessToken);
+  await gmail.users.stop({ userId: "me" });
+}
+
+export async function getHistory(
+  accessToken: string,
+  startHistoryId: string
+): Promise<Email[]> {
+  const gmail = getGmailClient(accessToken);
+  const res = await gmail.users.history.list({
+    userId: "me",
+    startHistoryId,
+    historyTypes: ["messageAdded"],
+    labelId: "INBOX",
+  });
+
+  const messageIds =
+    res.data.history?.flatMap(
+      (h) => h.messagesAdded?.map((m) => m.message?.id) || []
+    ) || [];
+  const uniqueIds = [...new Set(messageIds.filter(Boolean))] as string[];
+
+  if (uniqueIds.length === 0) return [];
+
+  const emails: Email[] = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const detail = await gmail.users.messages.get({
+        userId: "me",
+        id,
+        format: "full",
+      });
+      const headers = detail.data.payload?.headers || [];
+      return {
+        id: detail.data.id!,
+        threadId: detail.data.threadId!,
+        from: getHeader(headers, "From"),
+        to: getHeader(headers, "To"),
+        subject: getHeader(headers, "Subject"),
+        snippet: detail.data.snippet || "",
+        body: getBody(detail.data.payload),
+        date: getHeader(headers, "Date"),
+        isRead: !detail.data.labelIds?.includes("UNREAD"),
+        labels: detail.data.labelIds || [],
+      };
+    })
+  );
+
+  return emails;
 }
 
 export async function markAsRead(accessToken: string, emailId: string): Promise<void> {

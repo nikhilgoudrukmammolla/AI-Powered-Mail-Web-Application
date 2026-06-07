@@ -36,19 +36,37 @@ export function MailApp() {
   const { fetchInbox } = useMailContext();
   const { data: session, status } = useSession();
 
+  // Fetch inbox on initial login
   useEffect(() => {
     if (status === "authenticated") {
       fetchInbox();
     }
   }, [status, fetchInbox]);
 
-  // Poll for new emails every 30 seconds
+  // Register Gmail push notifications and listen via SSE
   useEffect(() => {
     if (status !== "authenticated") return;
-    const interval = setInterval(() => {
+
+    // Register Gmail watch for Pub/Sub push notifications
+    fetch("/api/gmail/watch", { method: "POST" }).catch((err) =>
+      console.error("Failed to register Gmail watch:", err)
+    );
+
+    // Open SSE connection to receive real-time push events
+    const eventSource = new EventSource("/api/gmail/events");
+
+    eventSource.onmessage = (event) => {
+      console.log("[SSE] New email notification received");
       fetchInbox();
-    }, 30000);
-    return () => clearInterval(interval);
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("[SSE] Connection error, will auto-reconnect:", err);
+    };
+
+    return () => {
+      eventSource.close();
+    };
   }, [status, fetchInbox]);
 
   return (

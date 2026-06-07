@@ -23,10 +23,11 @@ export async function GET(req: NextRequest) {
 
   const label = searchParams.get("label") || "INBOX";
   const maxResults = parseInt(searchParams.get("max") || "20", 10);
+  const pageToken = searchParams.get("pageToken") || undefined;
 
   try {
-    const emails = await fetchEmails(accessToken, filter, maxResults, [label]);
-    return NextResponse.json(emails);
+    const result = await fetchEmails(accessToken, filter, maxResults, [label], pageToken);
+    return NextResponse.json(result);
   } catch (error: any) {
     console.error("Gmail fetch error:", error.message);
     return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 });

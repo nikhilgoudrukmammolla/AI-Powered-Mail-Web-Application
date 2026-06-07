@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Mail, MailOpen } from "lucide-react";
+import { Loader2, Mail, MailOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMailContext } from "@/lib/mail-context";
 import { cn } from "@/lib/utils";
@@ -59,9 +59,9 @@ function EmailItem({ email }: { email: Email }) {
 }
 
 export function EmailList() {
-  const { emails, isLoading, currentView } = useMailContext();
+  const { emails, isLoading, currentView, hasMore, loadMore } = useMailContext();
 
-  if (isLoading) {
+  if (isLoading && emails.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -69,7 +69,7 @@ export function EmailList() {
     );
   }
 
-  if (emails.length === 0) {
+  if (!isLoading && emails.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
         <Mail className="h-12 w-12 mb-2" />
@@ -85,6 +85,21 @@ export function EmailList() {
           <EmailItem key={email.id} email={email} />
         ))}
       </div>
+      {hasMore && (
+        <div className="flex justify-center py-4">
+          <button
+            onClick={loadMore}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {isLoading ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Loading...</>
+            ) : (
+              "Load More"
+            )}
+          </button>
+        </div>
+      )}
     </ScrollArea>
   );
 }

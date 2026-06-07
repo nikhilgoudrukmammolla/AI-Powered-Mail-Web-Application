@@ -32,6 +32,10 @@ interface MailContextType {
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
 
+  // Pagination
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
+
   // Actions
   fetchInbox: (filter?: MailFilter) => Promise<void>;
   fetchSent: (filter?: MailFilter) => Promise<void>;
@@ -52,51 +56,71 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
   const [replyToEmail, setReplyToEmail] = useState<Email | null>(null);
   const [filter, setFilter] = useState<MailFilter>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
+  const [currentLabel, setCurrentLabel] = useState("INBOX");
+
+  const buildParams = useCallback((f: MailFilter | undefined, label: string, pageToken?: string) => {
+    const params = new URLSearchParams();
+    const activeFilter = f || filter;
+    if (activeFilter.query) params.set("q", activeFilter.query);
+    if (activeFilter.from) params.set("from", activeFilter.from);
+    if (activeFilter.after) params.set("after", activeFilter.after);
+    if (activeFilter.before) params.set("before", activeFilter.before);
+    if (activeFilter.isUnread) params.set("unread", "true");
+    params.set("label", label);
+    if (pageToken) params.set("pageToken", pageToken);
+    return params;
+  }, [filter]);
 
   const fetchInbox = useCallback(async (f?: MailFilter) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      const activeFilter = f || filter;
-      if (activeFilter.query) params.set("q", activeFilter.query);
-      if (activeFilter.from) params.set("from", activeFilter.from);
-      if (activeFilter.after) params.set("after", activeFilter.after);
-      if (activeFilter.before) params.set("before", activeFilter.before);
-      if (activeFilter.isUnread) params.set("unread", "true");
-      params.set("label", "INBOX");
-
+      const params = buildParams(f, "INBOX");
       const res = await fetch(`/api/emails?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setEmails(data);
+        setEmails(data.emails);
+        setNextPageToken(data.nextPageToken);
+        setCurrentLabel("INBOX");
         setCurrentView("inbox");
       }
     } finally {
       setIsLoading(false);
     }
-  }, [filter]);
+  }, [buildParams]);
 
   const fetchSent = useCallback(async (f?: MailFilter) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      const activeFilter = f || filter;
-      if (activeFilter.query) params.set("q", activeFilter.query);
-      if (activeFilter.from) params.set("from", activeFilter.from);
-      if (activeFilter.after) params.set("after", activeFilter.after);
-      if (activeFilter.before) params.set("before", activeFilter.before);
-      params.set("label", "SENT");
-
+      const params = buildParams(f, "SENT");
       const res = await fetch(`/api/emails?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setEmails(data);
+        setEmails(data.emails);
+        setNextPageToken(data.nextPageToken);
+        setCurrentLabel("SENT");
         setCurrentView("sent");
       }
     } finally {
       setIsLoading(false);
     }
-  }, [filter]);
+  }, [buildParams]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextPageToken) return;
+    setIsLoading(true);
+    try {
+      const params = buildParams(filter, currentLabel, nextPageToken);
+      const res = await fetch(`/api/emails?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEmails((prev) => [...prev, ...data.emails]);
+        setNextPageToken(data.nextPageToken);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [nextPageToken, buildParams, filter, currentLabel]);
 
   const openEmail = useCallback(async (emailId: string) => {
     setIsLoading(true);
@@ -158,6 +182,8 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
         replyToEmail, setReplyToEmail,
         filter, setFilter,
         isLoading, setIsLoading,
+        hasMore: !!nextPageToken,
+        loadMore,
         fetchInbox, fetchSent, openEmail, openCompose, sendMail,
       }}
     >
