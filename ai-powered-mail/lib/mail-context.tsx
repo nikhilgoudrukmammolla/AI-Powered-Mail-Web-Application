@@ -36,6 +36,9 @@ interface MailContextType {
   hasMore: boolean;
   loadMore: () => Promise<void>;
 
+  // Thread
+  threadMessages: Email[];
+
   // Actions
   fetchInbox: (filter?: MailFilter) => Promise<void>;
   fetchSent: (filter?: MailFilter) => Promise<void>;
@@ -122,6 +125,8 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
     }
   }, [nextPageToken, buildParams, filter, currentLabel]);
 
+  const [threadMessages, setThreadMessages] = useState<Email[]>([]);
+
   const openEmail = useCallback(async (emailId: string) => {
     setIsLoading(true);
     try {
@@ -130,6 +135,17 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
         const email = await res.json();
         setSelectedEmail(email);
         setCurrentView("detail");
+
+        // Fetch thread if it has a threadId
+        if (email.threadId) {
+          const threadRes = await fetch(`/api/emails/thread/${email.threadId}`);
+          if (threadRes.ok) {
+            const messages = await threadRes.json();
+            setThreadMessages(messages);
+          } else {
+            setThreadMessages([]);
+          }
+        }
       }
     } finally {
       setIsLoading(false);
@@ -184,6 +200,7 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
         isLoading, setIsLoading,
         hasMore: !!nextPageToken,
         loadMore,
+        threadMessages,
         fetchInbox, fetchSent, openEmail, openCompose, sendMail,
       }}
     >

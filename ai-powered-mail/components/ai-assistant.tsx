@@ -3,6 +3,7 @@
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useMailContext } from "@/lib/mail-context";
+import { Mail, MailOpen, Send, Forward, Reply, ArrowRight } from "lucide-react";
 
 export function AIAssistant() {
   const {
@@ -58,30 +59,77 @@ export function AIAssistant() {
       : "No email currently open",
   });
 
-  // Action: Compose and send email
+  useCopilotReadable({
+    description: "Current compose form state (if compose view is open)",
+    value: currentView === "compose"
+      ? JSON.stringify({ to: composeTo, subject: composeSubject, body: composeBody.substring(0, 200) })
+      : "Compose form is not open",
+  });
+
+  // Action: Compose email (human-in-the-loop — never auto-sends)
   useCopilotAction({
-    name: "composeAndSendEmail",
+    name: "composeEmail",
     description:
-      "Compose a new email. Opens the compose view, fills in the fields visibly, and optionally sends it. Use this when the user asks to send or compose an email.",
+      "Compose a new email. Opens the compose view and fills in the fields visibly. NEVER sends automatically — the user must review and confirm. Use this when the user asks to write, draft, or send an email.",
     parameters: [
       { name: "to", type: "string", description: "Recipient email address", required: true },
       { name: "subject", type: "string", description: "Email subject line", required: true },
       { name: "body", type: "string", description: "Email body content", required: true },
-      { name: "autoSend", type: "boolean", description: "Whether to automatically send (true) or just fill the compose form (false). Default true.", required: false },
     ],
-    handler: async ({ to, subject, body, autoSend = true }) => {
-      // Open compose view and fill fields visibly
+    handler: async ({ to, subject, body }) => {
       openCompose(to, subject, body);
-
-      if (autoSend) {
-        // Small delay so user can see the fields being filled
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const success = await sendMail(to, subject, body);
-        return success
-          ? `Email sent successfully to ${to} with subject "${subject}"`
-          : "Failed to send email. Please try again.";
+      return `Compose form opened and filled:\n• To: ${to}\n• Subject: ${subject}\n\nPlease review the email and click Send, or tell me to send it.`;
+    },
+    render: ({ args, status }) => {
+      if (status === "executing" || status === "complete") {
+        return (
+          <div className="rounded-lg border border-border bg-card p-3 my-2 text-sm">
+            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+              <Send className="h-3.5 w-3.5" />
+              <span className="font-medium">Draft Email</span>
+            </div>
+            <div className="space-y-1">
+              <p><span className="text-muted-foreground">To:</span> {args.to}</p>
+              <p><span className="text-muted-foreground">Subject:</span> {args.subject}</p>
+              <p className="text-muted-foreground text-xs mt-1 line-clamp-2">{args.body}</p>
+            </div>
+            {status === "complete" && (
+              <p className="text-xs text-amber-500 mt-2">⏳ Awaiting your review — click Send in the compose form or ask me to send it.</p>
+            )}
+          </div>
+        );
       }
-      return `Compose form opened with To: ${to}, Subject: "${subject}". Ready to send.`;
+      return <></>;
+    },
+  });
+
+  // Action: Confirm and send the current draft (human-in-the-loop step 2)
+  useCopilotAction({
+    name: "confirmSendEmail",
+    description:
+      "Send the email currently in the compose form. Only use this AFTER composeEmail has been called and the user explicitly confirms they want to send it (e.g. 'yes send it', 'go ahead', 'send').",
+    parameters: [],
+    handler: async () => {
+      if (!composeTo || !composeSubject) {
+        return "No email is drafted. Please compose an email first.";
+      }
+      const success = await sendMail(composeTo, composeSubject, composeBody);
+      if (success) {
+        return `Email sent successfully to ${composeTo}!`;
+      }
+      return "Failed to send email. Please try again.";
+    },
+    render: ({ status }) => {
+      if (status === "complete") {
+        return (
+          <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 my-2 text-sm">
+            <p className="text-green-400 flex items-center gap-2">
+              <Send className="h-3.5 w-3.5" /> Email sent!
+            </p>
+          </div>
+        );
+      }
+      return <></>;
     },
   });
 
@@ -113,7 +161,67 @@ export function AIAssistant() {
       } else {
         await fetchInbox(newFilter);
       }
-      return `Showing filtered emails. Found results matching your criteria.`;
+      return `Updated the ${folder} view with filtered results.`;
+    },
+    render: ({ args, status }) => {
+      const filters = [];
+      if (args.query) filters.push(`keyword "${args.query}"`);
+      if (args.from) filters.push(`from ${args.from}`);
+      if (args.after) filters.push(`after ${args.after}`);
+      if (args.before) filters.push(`before ${args.before}`);
+      if (args.unreadOnly) filters.push("unread only");
+
+      if (status === "executing") {
+        return (
+          <div className="rounded-lg border border-border bg-card p-3 my-2 text-sm text-muted-foreground">
+            Searching{filters.length > 0 ? `: ${filters.join(", ")}` : ""}...
+          </div>
+        );
+      }
+
+      if (status === "complete") {
+        return (
+          <div className="rounded-lg border border-border bg-card p-3 my-2 text-sm">
+            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+              <Mail className="h-3.5 w-3.5" />
+              <span className="font-medium">Search Results</span>
+              <span className="ml-auto text-xs">{emails.length} emails</span>
+            </div>
+            {emails.length > 0 ? (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {emails.slice(0, 5).map((e) => {
+                  const sender = e.from.includes("<")
+                    ? e.from.split("<")[0].trim().replace(/"/g, "")
+                    : e.from;
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => openEmail(e.id)}
+                      className="w-full text-left p-1.5 rounded hover:bg-muted/50 transition-colors flex items-start gap-2"
+                    >
+                      {e.isRead ? (
+                        <MailOpen className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+                      ) : (
+                        <Mail className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className={`text-xs truncate ${!e.isRead ? "font-semibold" : ""}`}>{sender}</p>
+                        <p className="text-xs text-muted-foreground truncate">{e.subject || "(no subject)"}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {emails.length > 5 && (
+                  <p className="text-xs text-muted-foreground text-center">+{emails.length - 5} more in the main view</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No emails found matching your criteria.</p>
+            )}
+          </div>
+        );
+      }
+      return <></>;
     },
   });
 
@@ -131,16 +239,15 @@ export function AIAssistant() {
     },
   });
 
-  // Action: Reply to current email
+  // Action: Reply to current email (human-in-the-loop)
   useCopilotAction({
     name: "replyToEmail",
     description:
-      "Reply to the currently opened email. Opens compose with pre-filled reply context. Use when user says 'reply to this' or 'respond to this email'.",
+      "Reply to the currently opened email. Opens compose with pre-filled reply context. NEVER sends automatically. Use when user says 'reply to this' or 'respond to this email'.",
     parameters: [
       { name: "body", type: "string", description: "The reply message body", required: true },
-      { name: "autoSend", type: "boolean", description: "Whether to send immediately or just fill the form", required: false },
     ],
-    handler: async ({ body, autoSend = false }) => {
+    handler: async ({ body }) => {
       if (!selectedEmail) {
         return "No email is currently open. Please open an email first.";
       }
@@ -154,15 +261,66 @@ export function AIAssistant() {
         : `Re: ${selectedEmail.subject}`;
 
       openCompose(replyTo, replySubject, body, selectedEmail);
-
-      if (autoSend) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const success = await sendMail(replyTo, replySubject, body);
-        return success
-          ? `Reply sent to ${replyTo}`
-          : "Failed to send reply.";
+      return `Reply form opened to ${replyTo}. Please review and click Send, or ask me to send it.`;
+    },
+    render: ({ args, status }) => {
+      if (status === "executing" || status === "complete") {
+        return (
+          <div className="rounded-lg border border-border bg-card p-3 my-2 text-sm">
+            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+              <Reply className="h-3.5 w-3.5" />
+              <span className="font-medium">Reply Draft</span>
+            </div>
+            <p className="text-xs text-muted-foreground line-clamp-3">{args.body}</p>
+            {status === "complete" && (
+              <p className="text-xs text-amber-500 mt-2">⏳ Review the reply and click Send, or ask me to send it.</p>
+            )}
+          </div>
+        );
       }
-      return `Reply form opened to ${replyTo}. Ready to send.`;
+      return <></>;
+    },
+  });
+
+  // Action: Forward current email
+  useCopilotAction({
+    name: "forwardEmail",
+    description:
+      "Forward the currently opened email to another recipient. Opens compose with forwarded content. Use when user says 'forward this' or 'forward to someone'.",
+    parameters: [
+      { name: "to", type: "string", description: "Recipient email address to forward to", required: true },
+      { name: "additionalMessage", type: "string", description: "Optional message to add above the forwarded content", required: false },
+    ],
+    handler: async ({ to, additionalMessage }) => {
+      if (!selectedEmail) {
+        return "No email is currently open. Please open an email first.";
+      }
+
+      const fwdSubject = selectedEmail.subject.startsWith("Fwd:")
+        ? selectedEmail.subject
+        : `Fwd: ${selectedEmail.subject}`;
+
+      const fwdBody = `${additionalMessage || ""}\n\n---------- Forwarded message ----------\nFrom: ${selectedEmail.from}\nDate: ${selectedEmail.date}\nSubject: ${selectedEmail.subject}\nTo: ${selectedEmail.to}\n\n${selectedEmail.body}`;
+
+      openCompose(to, fwdSubject, fwdBody);
+      return `Forward form opened to ${to}. Please review and click Send, or ask me to send it.`;
+    },
+    render: ({ args, status }) => {
+      if (status === "executing" || status === "complete") {
+        return (
+          <div className="rounded-lg border border-border bg-card p-3 my-2 text-sm">
+            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+              <Forward className="h-3.5 w-3.5" />
+              <span className="font-medium">Forward Email</span>
+            </div>
+            <p><span className="text-muted-foreground">To:</span> {args.to}</p>
+            {status === "complete" && (
+              <p className="text-xs text-amber-500 mt-2">⏳ Review and click Send, or ask me to send it.</p>
+            )}
+          </div>
+        );
+      }
+      return <></>;
     },
   });
 
@@ -193,20 +351,22 @@ export function AIAssistant() {
     <CopilotSidebar
       defaultOpen={true}
       instructions={`You are an AI assistant for a mail application. You can:
-1. Compose and send emails on behalf of the user
-2. Search and filter emails by sender, date, keywords, or read status
-3. Open and read specific emails
-4. Reply to the currently open email
-5. Navigate between views (inbox, sent, compose)
+1. Compose emails — use composeEmail to fill the form. NEVER send automatically.
+2. Send emails — ONLY use confirmSendEmail AFTER the user explicitly says "send it", "yes", "go ahead", etc.
+3. Search and filter emails — use searchEmails to update the main UI with results.
+4. Open and read specific emails — use openEmail with an ID from the displayed list.
+5. Reply to emails — use replyToEmail when an email is open and user says "reply to this".
+6. Forward emails — use forwardEmail when an email is open and user says "forward this to X".
+7. Navigate between views — use navigateTo for inbox, sent, or compose.
 
-When the user asks to find emails, use the searchEmails action to update the UI.
-When the user asks to send an email, use composeAndSendEmail to visibly fill the form and send.
-When the user asks to open an email, identify it from the currently displayed list and use openEmail.
-When the user says "reply to this", use replyToEmail with the currently open email context.
-Always confirm actions with the user and provide helpful feedback.`}
+IMPORTANT RULES:
+- Always use composeEmail first, then wait for user confirmation before calling confirmSendEmail.
+- When searching by date, calculate the correct YYYY/MM/DD from relative terms like "last 10 days".
+- When opening an email, match the user's description to the email list context you have.
+- Today's date is ${new Date().toISOString().split("T")[0]}.`}
       labels={{
         title: "Mail Assistant",
-        initial: "Hi! I can help you manage your emails. Try:\n• \"Send an email to john@example.com\"\n• \"Show unread emails from this week\"\n• \"Open the latest email\"\n• \"Reply to this\"",
+        initial: "Hi! I can help you manage your emails. Try:\n• \"Send an email to john@example.com\"\n• \"Show unread emails from this week\"\n• \"Open the latest email\"\n• \"Reply to this\" or \"Forward this to jane@example.com\"",
       }}
     />
   );

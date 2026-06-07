@@ -1,17 +1,21 @@
 "use client";
 
-import { Inbox, Send, PenSquare, LogOut } from "lucide-react";
+import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMailContext } from "@/lib/mail-context";
-import { signOut } from "next-auth/react";
+import { useTheme } from "@/lib/theme-context";
+import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const { currentView, fetchInbox, fetchSent, openCompose, setFilter } = useMailContext();
+  const { theme, toggleTheme } = useTheme();
+  const { data: session } = useSession();
 
   return (
     <aside className="w-60 border-r border-border bg-muted/30 flex flex-col h-full">
-      <div className="p-4">
+      <div className="p-4 flex items-center gap-2">
+        <Mail className="h-5 w-5 text-primary" />
         <h1 className="text-lg font-bold text-foreground">AI Mail</h1>
       </div>
 
@@ -44,7 +48,19 @@ export function Sidebar() {
         </Button>
       </nav>
 
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-1">
+        {session?.user?.email && (
+          <p className="text-xs text-muted-foreground truncate px-3 mb-2">{session.user.email}</p>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-full justify-start gap-2 text-muted-foreground"
+          onClick={toggleTheme}
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          <span className="text-sm">{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+        </Button>
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-muted-foreground"

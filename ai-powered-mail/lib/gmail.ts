@@ -7,16 +7,16 @@ function getGmailClient(accessToken: string) {
   return google.gmail({ version: "v1", auth });
 }
 
-function decodeBase64(data: string): string {
+export function decodeBase64(data: string): string {
   return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
 }
 
-function getHeader(headers: any[], name: string): string {
+export function getHeader(headers: any[], name: string): string {
   const header = headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase());
   return header?.value || "";
 }
 
-function getBody(payload: any): string {
+export function getBody(payload: any): string {
   if (payload.body?.data) {
     return decodeBase64(payload.body.data);
   }
@@ -37,7 +37,7 @@ function getBody(payload: any): string {
   return "";
 }
 
-function buildQuery(filter: MailFilter): string {
+export function buildQuery(filter: MailFilter): string {
   const parts: string[] = [];
   if (filter.query) parts.push(filter.query);
   if (filter.from) parts.push(`from:${filter.from}`);
@@ -115,6 +115,35 @@ export async function fetchEmailById(accessToken: string, emailId: string): Prom
     isRead: !detail.data.labelIds?.includes("UNREAD"),
     labels: detail.data.labelIds || [],
   };
+}
+
+export async function fetchThread(
+  accessToken: string,
+  threadId: string
+): Promise<Email[]> {
+  const gmail = getGmailClient(accessToken);
+  const res = await gmail.users.threads.get({
+    userId: "me",
+    id: threadId,
+    format: "full",
+  });
+
+  const messages = res.data.messages || [];
+  return messages.map((msg) => {
+    const headers = msg.payload?.headers || [];
+    return {
+      id: msg.id!,
+      threadId: msg.threadId!,
+      from: getHeader(headers, "From"),
+      to: getHeader(headers, "To"),
+      subject: getHeader(headers, "Subject"),
+      snippet: msg.snippet || "",
+      body: getBody(msg.payload),
+      date: getHeader(headers, "Date"),
+      isRead: !msg.labelIds?.includes("UNREAD"),
+      labels: msg.labelIds || [],
+    };
+  });
 }
 
 export async function sendEmail(

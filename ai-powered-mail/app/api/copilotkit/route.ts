@@ -1,8 +1,8 @@
 import {
   CopilotRuntime,
-  copilotRuntimeNextJSAppRouterEndpoint,
-} from "@copilotkit/runtime";
-import { BuiltInAgent } from "@copilotkit/runtime/v2";
+  BuiltInAgent,
+  createCopilotRuntimeHandler,
+} from "@copilotkit/runtime/v2";
 import { NextRequest } from "next/server";
 import { aiModel } from "@/customModel";
 
@@ -14,11 +14,13 @@ const runtime = new CopilotRuntime({
   agents: { default: agent },
 });
 
-export const POST = async (req: NextRequest) => {
-  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
-    runtime,
-    endpoint: "/api/copilotkit",
-  });
+const handler = createCopilotRuntimeHandler({
+  runtime,
+  basePath: "/api/copilotkit",
+  mode: "single-route",
+  cors: false,
+});
 
-  return handleRequest(req);
+export const POST = async (req: NextRequest) => {
+  return handler(req);
 };
