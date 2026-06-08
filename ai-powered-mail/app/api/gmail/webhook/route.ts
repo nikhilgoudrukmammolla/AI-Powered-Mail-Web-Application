@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { emailEventEmitter } from "@/lib/gmail-events";
+import { storeNewMailNotification } from "@/lib/redis";
 
 // Google Cloud Pub/Sub sends POST requests here when a Gmail mailbox changes.
 // The push subscription URL should point to: <your-public-url>/api/gmail/webhook
@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
     const { emailAddress, historyId } = decoded;
     console.log(`[Webhook] New mail notification for ${emailAddress}, historyId: ${historyId}`);
 
-    // Emit event so SSE connections can notify the frontend
-    emailEventEmitter.emit("new-email", { emailAddress, historyId });
+    // Store notification in Redis so polling clients pick it up
+    await storeNewMailNotification(emailAddress, historyId);
 
     // Pub/Sub expects a 2xx to acknowledge the message
     return NextResponse.json({ status: "ok" });

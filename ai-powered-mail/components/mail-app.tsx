@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { Sidebar } from "./sidebar";
 import { EmailList } from "./email-list";
@@ -43,7 +43,9 @@ export function MailApp() {
     }
   }, [status, fetchInbox]);
 
-  // Register Gmail push notifications and listen via SSE
+  // Register Gmail push notifications and poll Redis for new emails
+  const lastPollTs = useRef(Date.now());
+
   useEffect(() => {
     if (status !== "authenticated") return;
 
@@ -53,20 +55,23 @@ export function MailApp() {
       .then(() => fetch("/api/gmail/watch", { method: "POST" }))
       .catch((err) => console.error("Failed to register Gmail watch:", err));
 
-    // Open SSE connection to receive real-time push events
-    const eventSource = new EventSource("/api/gmail/events");
-
-    eventSource.onmessage = (event) => {
-      console.log("[SSE] New email notification received");
-      fetchInbox();
-    };
-
-    eventSource.onerror = (err) => {
-      console.error("[SSE] Connection error, will auto-reconnect:", err);
-    };
+    // Poll Redis-backed endpoint every 15 seconds for webhook notifications
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/gmail/poll?since=${lastPollTs.current}`);
+        const data = await res.json();
+        if (data.hasNew) {
+          console.log("[Poll] New email detected, refreshing inbox...");
+          lastPollTs.current = data.timestamp;
+          fetchInbox();
+        }
+      } catch (err) {
+        console.error("[Poll] Error checking for new mail:", err);
+      }
+    }, 15000);
 
     return () => {
-      eventSource.close();
+      clearInterval(pollInterval);
     };
   }, [status, fetchInbox]);
 
