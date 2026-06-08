@@ -86,7 +86,7 @@ export function EmailList() {
         ))}
       </div>
       {hasMore && (
-        <div className="flex justify-center py-4">
+        <div className="flex ml-7 py-4">
           <button
             onClick={loadMore}
             disabled={isLoading}
