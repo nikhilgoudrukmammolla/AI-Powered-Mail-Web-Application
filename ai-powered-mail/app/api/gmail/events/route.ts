@@ -7,9 +7,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const encoder = new TextEncoder();
 
+  let onNewEmail: ((data: { emailAddress: string; historyId: string }) => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
-      const onNewEmail = (data: { emailAddress: string; historyId: string }) => {
+      onNewEmail = (data) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         } catch {
@@ -18,11 +21,11 @@ export async function GET() {
       };
 
       // Keep-alive heartbeat every 30 seconds
-      const heartbeat = setInterval(() => {
+      heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": heartbeat\n\n"));
         } catch {
-          clearInterval(heartbeat);
+          clearInterval(heartbeat!);
         }
       }, 30000);
 
@@ -30,17 +33,10 @@ export async function GET() {
 
       // Send initial connected message
       controller.enqueue(encoder.encode(": connected\n\n"));
-
-      // Cleanup when the stream is cancelled (client disconnects)
-      const originalCancel = stream.cancel?.bind(stream);
-      stream.cancel = (reason) => {
-        emailEventEmitter.off("new-email", onNewEmail);
-        clearInterval(heartbeat);
-        return originalCancel?.(reason) ?? Promise.resolve();
-      };
     },
     cancel() {
-      // Additional cleanup hook
+      if (onNewEmail) emailEventEmitter.off("new-email", onNewEmail);
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 

@@ -3,7 +3,7 @@
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useMailContext } from "@/lib/mail-context";
-import { Mail, MailOpen, Send, Forward, Reply, ArrowRight } from "lucide-react";
+import { Mail, MailOpen, Send, Forward, Reply } from "lucide-react";
 
 export function AIAssistant() {
   const {
@@ -349,6 +349,7 @@ export function AIAssistant() {
 
   return (
     <CopilotSidebar
+    
       defaultOpen={true}
       instructions={`You are an AI assistant for a mail application. You can:
 1. Compose emails — use composeEmail to fill the form. NEVER send automatically.
@@ -364,10 +365,15 @@ IMPORTANT RULES:
 - When searching by date, calculate the correct YYYY/MM/DD from relative terms like "last 10 days".
 - When opening an email, match the user's description to the email list context you have.
 - Today's date is ${new Date().toISOString().split("T")[0]}.`}
-      labels={{
-        title: "Mail Assistant",
-        initial: "Hi! I can help you manage your emails. Try:\n• \"Send an email to john@example.com\"\n• \"Show unread emails from this week\"\n• \"Open the latest email\"\n• \"Reply to this\" or \"Forward this to jane@example.com\"",
-      }}
+  labels={{
+    title: "Mail Assistant",
+    initial: `Hi! I can help you manage your emails. Try:
+
+- "Send an email to john@example.com"
+- "Show unread emails from this week"
+- "Open the latest email"
+- "Reply to this" or "Forward this to jane@example.com"`,
+  }}
     />
   );
 }

@@ -47,10 +47,11 @@ export function MailApp() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
-    // Register Gmail watch for Pub/Sub push notifications
-    fetch("/api/gmail/watch", { method: "POST" }).catch((err) =>
-      console.error("Failed to register Gmail watch:", err)
-    );
+    // Stop any existing watch, then register a fresh one
+    fetch("/api/gmail/watch", { method: "DELETE" })
+      .catch(() => {}) // ignore if no watch exists
+      .then(() => fetch("/api/gmail/watch", { method: "POST" }))
+      .catch((err) => console.error("Failed to register Gmail watch:", err));
 
     // Open SSE connection to receive real-time push events
     const eventSource = new EventSource("/api/gmail/events");
