@@ -41,7 +41,7 @@ export function ComposeForm() {
         </h2>
       </div>
 
-      <div className="flex-1 p-4 space-y-4">
+      <div className="flex-1 p-3 sm:p-4 space-y-3 overflow-y-auto">
         <div className="space-y-2">
           <label className="text-sm font-medium text-muted-foreground">To</label>
           <Input
@@ -66,12 +66,12 @@ export function ComposeForm() {
             value={composeBody}
             onChange={(e) => setComposeBody(e.target.value)}
             placeholder="Write your email..."
-            className="min-h-[200px] resize-none"
+            className="min-h-[180px] sm:min-h-[240px] resize-none"
           />
         </div>
       </div>
 
-      <div className="p-4 border-t border-border flex items-center justify-between">
+      <div className="p-3 sm:p-4 border-t border-border flex items-center justify-between">
         <div>
           {status === "sent" && <span className="text-sm text-green-500">Email sent!</span>}
           {status === "error" && <span className="text-sm text-destructive">Failed to send</span>}

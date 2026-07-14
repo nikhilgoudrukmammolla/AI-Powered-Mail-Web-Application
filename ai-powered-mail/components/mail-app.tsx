@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Sidebar } from "./sidebar";
 import { EmailList } from "./email-list";
@@ -8,6 +8,7 @@ import { EmailDetail } from "./email-detail";
 import { ComposeForm } from "./compose-form";
 import { MailFilters } from "./mail-filters";
 import { AIAssistant } from "./ai-assistant";
+import { MobileNav } from "./mobile-nav";
 import { useMailContext } from "@/lib/mail-context";
 
 function MainContent() {
@@ -35,6 +36,7 @@ function MainContent() {
 export function MailApp() {
   const { fetchInbox } = useMailContext();
   const { data: session, status } = useSession();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Fetch inbox on initial login
   useEffect(() => {
@@ -77,11 +79,36 @@ export function MailApp() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar: hidden on mobile unless open, always visible on md+ */}
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 md:static md:flex md:translate-x-0
+          transition-transform duration-300
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        <Sidebar onClose={() => setSidebarOpen(false)} />
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-hidden flex flex-col">
         <MainContent />
+        {/* Spacer so content isn't hidden behind mobile bottom nav */}
+        <div className="h-16 shrink-0 md:hidden" />
       </main>
+
       <AIAssistant />
+
+      {/* Mobile bottom nav */}
+      <MobileNav onMenuOpen={() => setSidebarOpen(true)} />
     </div>
   );
 }

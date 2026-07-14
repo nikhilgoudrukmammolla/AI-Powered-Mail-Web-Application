@@ -89,8 +89,8 @@ function EmailItem({ email }: { email: Email }) {
       </div>
 
       {/* Content */}
-<div className="flex-1  space-y-0.5 max-w-fit">
-  <div className="flex items-baseline gap-2">
+      <div className="flex-1 min-w-0 space-y-0.5">
+        <div className="flex items-baseline justify-between gap-2">
           <span
             className={cn(
               "text-sm truncate",

@@ -52,21 +52,22 @@ export function MailFilters() {
 
   return (
     <div className="border-b border-border">
-      <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 p-3">
-        <div className="relative flex-1">
+      <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 p-2 sm:p-3">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search emails..."
+            placeholder="Search..."
             className="pl-9"
           />
         </div>
-        <Button type="submit" size="sm">Search</Button>
+        <Button type="submit" size="sm" className="shrink-0">Search</Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
+          className="shrink-0"
           onClick={() => setShowFilters(!showFilters)}
         >
           <Filter className="h-4 w-4" />
