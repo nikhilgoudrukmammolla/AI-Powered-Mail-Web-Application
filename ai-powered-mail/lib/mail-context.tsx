@@ -42,9 +42,27 @@ interface MailContextType {
   // Actions
   fetchInbox: (filter?: MailFilter) => Promise<void>;
   fetchSent: (filter?: MailFilter) => Promise<void>;
+  fetchTrash: (filter?: MailFilter) => Promise<void>;
   openEmail: (emailId: string) => Promise<void>;
   openCompose: (to?: string, subject?: string, body?: string, replyTo?: Email) => void;
   sendMail: (to: string, subject: string, body: string) => Promise<boolean>;
+
+  // Delete / Trash
+  trashEmail: (emailId: string, permanent?: boolean) => Promise<boolean>;
+  trashByIds: (ids: string[], permanent?: boolean) => Promise<number>;
+  deleteByFilter: (
+    filter: MailFilter,
+    folder?: string,
+    permanent?: boolean
+  ) => Promise<number>;
+  previewDelete: (
+    filter: MailFilter,
+    folder?: string
+  ) => Promise<{ count: number; ids: string[] }>;
+  emptyTrashAll: () => Promise<number>;
+  undoDelete: () => Promise<boolean>;
+  lastDeleted: { ids: string[]; permanent: boolean } | null;
+  clearLastDeleted: () => void;
 }
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -61,6 +79,7 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [currentLabel, setCurrentLabel] = useState("INBOX");
+  const [lastDeleted, setLastDeleted] = useState<{ ids: string[]; permanent: boolean } | null>(null);
 
   const buildParams = useCallback((f: MailFilter | undefined, label: string, pageToken?: string) => {
     const params = new URLSearchParams();
@@ -70,6 +89,8 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
     if (activeFilter.after) params.set("after", activeFilter.after);
     if (activeFilter.before) params.set("before", activeFilter.before);
     if (activeFilter.isUnread) params.set("unread", "true");
+    if (activeFilter.subject) params.set("subject", activeFilter.subject);
+    if (activeFilter.category) params.set("category", activeFilter.category);
     params.set("label", label);
     if (pageToken) params.set("pageToken", pageToken);
     return params;
@@ -103,6 +124,23 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
         setNextPageToken(data.nextPageToken);
         setCurrentLabel("SENT");
         setCurrentView("sent");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [buildParams]);
+
+  const fetchTrash = useCallback(async (f?: MailFilter) => {
+    setIsLoading(true);
+    try {
+      const params = buildParams(f, "TRASH");
+      const res = await fetch(`/api/emails?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEmails(data.emails);
+        setNextPageToken(data.nextPageToken);
+        setCurrentLabel("TRASH");
+        setCurrentView("trash");
       }
     } finally {
       setIsLoading(false);
@@ -186,6 +224,129 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
     }
   }, [replyToEmail]);
 
+  // ---------------- Delete / Trash ----------------
+
+  // Trash (or permanently delete) a single email. Removes it from the current list optimistically.
+  const trashEmail = useCallback(async (emailId: string, permanent = false): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/emails/${emailId}?permanent=${permanent}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setEmails((prev) => prev.filter((e) => e.id !== emailId));
+        setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
+        setLastDeleted(permanent ? null : { ids: [emailId], permanent });
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Trash (or permanently delete) a specific set of emails by their IDs.
+  const trashByIds = useCallback(async (ids: string[], permanent = false): Promise<number> => {
+    if (ids.length === 0) return 0;
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/emails/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, permanent }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const deletedIds: string[] = data.ids || [];
+        setEmails((prev) => prev.filter((e) => !deletedIds.includes(e.id)));
+        setLastDeleted(permanent ? null : { ids: deletedIds, permanent });
+        return data.deleted || 0;
+      }
+      return 0;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Preview how many emails match a filter without deleting them.
+  const previewDelete = useCallback(
+    async (f: MailFilter, folder = "INBOX"): Promise<{ count: number; ids: string[] }> => {
+      const res = await fetch("/api/emails/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filter: f, folder, preview: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { count: data.count, ids: data.ids };
+      }
+      return { count: 0, ids: [] };
+    },
+    []
+  );
+
+  // Bulk delete all emails matching a filter. Returns number deleted.
+  const deleteByFilter = useCallback(
+    async (f: MailFilter, folder = "INBOX", permanent = false): Promise<number> => {
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/emails/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filter: f, folder, permanent }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const deletedIds: string[] = data.ids || [];
+          setEmails((prev) => prev.filter((e) => !deletedIds.includes(e.id)));
+          setLastDeleted(permanent ? null : { ids: deletedIds, permanent });
+          return data.deleted || 0;
+        }
+        return 0;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  // Permanently empty the Trash.
+  const emptyTrashAll = useCallback(async (): Promise<number> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/emails/empty-trash", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (currentLabel === "TRASH") setEmails([]);
+        setLastDeleted(null);
+        return data.deleted || 0;
+      }
+      return 0;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentLabel]);
+
+  // Restore the most recently trashed emails.
+  const undoDelete = useCallback(async (): Promise<boolean> => {
+    if (!lastDeleted || lastDeleted.permanent || lastDeleted.ids.length === 0) return false;
+    const res = await fetch("/api/emails/untrash", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: lastDeleted.ids }),
+    });
+    if (res.ok) {
+      setLastDeleted(null);
+      // Refresh whichever folder we're viewing so restored mail reappears.
+      if (currentLabel === "INBOX") await fetchInbox(filter);
+      else if (currentLabel === "SENT") await fetchSent(filter);
+      else if (currentLabel === "TRASH") await fetchTrash(filter);
+      return true;
+    }
+    return false;
+  }, [lastDeleted, currentLabel, filter, fetchInbox, fetchSent, fetchTrash]);
+
+  const clearLastDeleted = useCallback(() => setLastDeleted(null), []);
+
   return (
     <MailContext.Provider
       value={{
@@ -201,7 +362,9 @@ export function MailProvider({ children }: { children: React.ReactNode }) {
         hasMore: !!nextPageToken,
         loadMore,
         threadMessages,
-        fetchInbox, fetchSent, openEmail, openCompose, sendMail,
+        fetchInbox, fetchSent, fetchTrash, openEmail, openCompose, sendMail,
+        trashEmail, trashByIds, deleteByFilter, previewDelete, emptyTrashAll, undoDelete,
+        lastDeleted, clearLastDeleted,
       }}
     >
       {children}

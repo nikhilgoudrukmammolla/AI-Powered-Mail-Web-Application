@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Inbox, Send, PenSquare, MoreVertical, LogOut, Sun, Moon } from "lucide-react";
+import { Inbox, Send, PenSquare, MoreVertical, LogOut, Sun, Moon, Trash2 } from "lucide-react";
 import { useMailContext } from "@/lib/mail-context";
 import { useTheme } from "@/lib/theme-context";
 import { signOut, useSession } from "next-auth/react";
@@ -12,7 +12,7 @@ interface MobileNavProps {
 }
 
 export function MobileNav({ onMenuOpen }: MobileNavProps) {
-  const { currentView, fetchInbox, fetchSent, openCompose, setFilter } = useMailContext();
+  const { currentView, fetchInbox, fetchSent, fetchTrash, openCompose, setFilter } = useMailContext();
   const { theme, toggleTheme } = useTheme();
   const { data: session } = useSession();
   const [dropUpOpen, setDropUpOpen] = useState(false);
@@ -101,10 +101,22 @@ export function MobileNav({ onMenuOpen }: MobileNavProps) {
                 </div>
               )}
 
+              {/* Trash */}
+              <button
+                onClick={() => { setFilter({}); fetchTrash({}); setDropUpOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/60 transition-colors",
+                  currentView === "trash" ? "text-primary" : "text-foreground"
+                )}
+              >
+                <Trash2 className="h-4 w-4" />
+                Trash
+              </button>
+
               {/* Theme toggle */}
               <button
                 onClick={() => { toggleTheme(); setDropUpOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-muted/60 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-muted/60 transition-colors border-t border-border"
               >
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 {theme === "dark" ? "Light Mode" : "Dark Mode"}

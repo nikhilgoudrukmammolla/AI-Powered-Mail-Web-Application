@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail, X } from "lucide-react";
+import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMailContext } from "@/lib/mail-context";
 import { useTheme } from "@/lib/theme-context";
@@ -8,7 +8,7 @@ import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
-  const { currentView, fetchInbox, fetchSent, openCompose, setFilter } = useMailContext();
+  const { currentView, fetchInbox, fetchSent, fetchTrash, openCompose, setFilter } = useMailContext();
   const { theme, toggleTheme } = useTheme();
   const { data: session } = useSession();
 
@@ -54,6 +54,14 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         >
           <Send className="h-4 w-4" />
           Sent
+        </Button>
+        <Button
+          variant={currentView === "trash" ? "secondary" : "ghost"}
+          className={cn("w-full justify-start gap-2 cursor-pointer")}
+          onClick={() => handleNav(() => { setFilter({}); fetchTrash({}); })}
+        >
+          <Trash2 className="h-4 w-4" />
+          Trash
         </Button>
       </nav>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Reply, Forward, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
+import { ArrowLeft, Reply, Forward, ChevronDown, ChevronRight, MessageSquare, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMailContext } from "@/lib/mail-context";
@@ -65,7 +65,7 @@ function ThreadMessage({ email, isExpanded, onToggle }: { email: Email; isExpand
 }
 
 export function EmailDetail() {
-  const { selectedEmail, setCurrentView, openCompose, threadMessages } = useMailContext();
+  const { selectedEmail, setCurrentView, openCompose, threadMessages, trashEmail } = useMailContext();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   if (!selectedEmail) {
@@ -95,6 +95,12 @@ export function EmailDetail() {
       `Fwd: ${selectedEmail.subject}`,
       `\n\n---------- Forwarded message ----------\nFrom: ${selectedEmail.from}\nDate: ${selectedEmail.date}\nSubject: ${selectedEmail.subject}\nTo: ${selectedEmail.to}\n\n${selectedEmail.body}`
     );
+  };
+
+  const handleDelete = async () => {
+    const id = selectedEmail.id;
+    await trashEmail(id);
+    setCurrentView("inbox");
   };
 
   const toggleMessage = (id: string) => {
@@ -134,6 +140,15 @@ export function EmailDetail() {
         </Button>
         <Button variant="ghost" size="icon" className="shrink-0" onClick={handleForward} title="Forward">
           <Forward className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={handleDelete}
+          title="Move to Trash"
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 

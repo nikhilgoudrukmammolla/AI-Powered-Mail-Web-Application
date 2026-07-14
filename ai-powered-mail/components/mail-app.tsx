@@ -9,6 +9,7 @@ import { ComposeForm } from "./compose-form";
 import { MailFilters } from "./mail-filters";
 import { AIAssistant } from "./ai-assistant";
 import { MobileNav } from "./mobile-nav";
+import { UndoToast } from "./undo-toast";
 import { useMailContext } from "@/lib/mail-context";
 
 function MainContent() {
@@ -38,12 +39,17 @@ export function MailApp() {
   const { data: session, status } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Fetch inbox on initial login
+  // Fetch inbox on initial login — only once. Do NOT depend on fetchInbox,
+  // whose identity changes when the filter changes (navigating to Sent/Trash),
+  // otherwise this effect would re-run and snap the view back to Inbox.
+  const didInitialFetch = useRef(false);
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && !didInitialFetch.current) {
+      didInitialFetch.current = true;
       fetchInbox();
     }
-  }, [status, fetchInbox]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Register Gmail push notifications and poll Redis for new emails
   const lastPollTs = useRef(Date.now());
@@ -106,6 +112,9 @@ export function MailApp() {
       </main>
 
       <AIAssistant />
+
+      {/* Undo toast */}
+      <UndoToast />
 
       {/* Mobile bottom nav */}
       <MobileNav onMenuOpen={() => setSidebarOpen(true)} />
