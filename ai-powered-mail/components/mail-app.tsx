@@ -10,7 +10,9 @@ import { MailFilters } from "./mail-filters";
 import { AIAssistant } from "./ai-assistant";
 import { MobileNav } from "./mobile-nav";
 import { UndoToast } from "./undo-toast";
+import { AIProviderSettings } from "./ai-provider-settings";
 import { useMailContext } from "@/lib/mail-context";
+import { useAIConfig } from "@/lib/ai-config-context";
 
 function MainContent() {
   const { currentView } = useMailContext();
@@ -36,6 +38,7 @@ function MainContent() {
 
 export function MailApp() {
   const { fetchInbox } = useMailContext();
+  const { hydrated, isConfigured, openSettings } = useAIConfig();
   const { data: session, status } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -50,6 +53,16 @@ export function MailApp() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  // First-time prompt: once logged in and localStorage has been read, if no
+  // provider is configured yet, open the Keys panel so the user can pick one.
+  const didPromptConfig = useRef(false);
+  useEffect(() => {
+    if (status === "authenticated" && hydrated && !isConfigured && !didPromptConfig.current) {
+      didPromptConfig.current = true;
+      openSettings();
+    }
+  }, [status, hydrated, isConfigured, openSettings]);
 
   // Register Gmail push notifications and poll Redis for new emails
   const lastPollTs = useRef(Date.now());
@@ -115,6 +128,9 @@ export function MailApp() {
 
       {/* Undo toast */}
       <UndoToast />
+
+      {/* AI provider keys modal */}
+      <AIProviderSettings />
 
       {/* Mobile bottom nav */}
       <MobileNav onMenuOpen={() => setSidebarOpen(true)} />

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Inbox, Send, PenSquare, MoreVertical, LogOut, Sun, Moon, Trash2 } from "lucide-react";
+import { Inbox, Send, PenSquare, MoreVertical, LogOut, Sun, Moon, Trash2, KeyRound } from "lucide-react";
 import { useMailContext } from "@/lib/mail-context";
 import { useTheme } from "@/lib/theme-context";
+import { useAIConfig } from "@/lib/ai-config-context";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ interface MobileNavProps {
 export function MobileNav({ onMenuOpen }: MobileNavProps) {
   const { currentView, fetchInbox, fetchSent, fetchTrash, openCompose, setFilter } = useMailContext();
   const { theme, toggleTheme } = useTheme();
+  const { openSettings, isConfigured } = useAIConfig();
   const { data: session } = useSession();
   const [dropUpOpen, setDropUpOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -111,6 +113,21 @@ export function MobileNav({ onMenuOpen }: MobileNavProps) {
               >
                 <Trash2 className="h-4 w-4" />
                 Trash
+              </button>
+
+              {/* Keys */}
+              <button
+                onClick={() => { openSettings(); setDropUpOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-muted/60 transition-colors border-t border-border"
+              >
+                <KeyRound className="h-4 w-4" />
+                <span className="flex-1 text-left">Keys</span>
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full shrink-0",
+                    isConfigured ? "bg-emerald-500" : "bg-amber-500"
+                  )}
+                />
               </button>
 
               {/* Theme toggle */}

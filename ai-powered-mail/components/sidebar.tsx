@@ -1,15 +1,17 @@
 "use client";
 
-import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail, X, Trash2 } from "lucide-react";
+import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail, X, Trash2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMailContext } from "@/lib/mail-context";
 import { useTheme } from "@/lib/theme-context";
+import { useAIConfig } from "@/lib/ai-config-context";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { currentView, fetchInbox, fetchSent, fetchTrash, openCompose, setFilter } = useMailContext();
   const { theme, toggleTheme } = useTheme();
+  const { openSettings, isConfigured, config } = useAIConfig();
   const { data: session } = useSession();
 
   const handleNav = (fn: () => void) => {
@@ -69,6 +71,21 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         {session?.user?.email && (
           <p className="text-xs text-muted-foreground truncate px-3 mb-2">{session.user.email}</p>
         )}
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground cursor-pointer"
+          onClick={() => handleNav(openSettings)}
+        >
+          <KeyRound className="h-4 w-4" />
+          <span className="text-sm flex-1 text-left">Keys</span>
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full shrink-0",
+              isConfigured ? "bg-emerald-500" : "bg-amber-500"
+            )}
+            title={isConfigured ? `${config?.provider} configured` : "Not configured"}
+          />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
