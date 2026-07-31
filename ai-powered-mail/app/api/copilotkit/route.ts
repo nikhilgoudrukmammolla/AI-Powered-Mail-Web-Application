@@ -39,6 +39,7 @@ function resolveModel(req: NextRequest): LanguageModel | null {
 export const POST = async (req: NextRequest) => {
   const model = resolveModel(req);
 
+  
   if (!model) {
     return NextResponse.json(
       {
