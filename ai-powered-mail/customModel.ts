@@ -31,20 +31,12 @@ export function buildModel(config: AIProviderConfig): LanguageModel | null {
   return null;
 }
 
-// Optional fallback built from server env vars (Azure). Returns null when the
-// env vars are not present, so the app never crashes at startup for users who
-// rely solely on bring-your-own-key configuration.
-export function buildDefaultModelFromEnv(): LanguageModel | null {
-  const resourceName = process.env.AZURE_OPENAI_API_INSTANCE_NAME;
-  const apiKey = process.env.AZURE_OPENAI_API_KEY;
-  const deploymentName = process.env.AZURE_OPENAI_API_DEPLOYMENT_NAME;
-
-  if (!resourceName || !apiKey || !deploymentName) return null;
-
-  return buildModel({
-    provider: "azure",
-    apiKey,
-    azureResourceName: resourceName,
-    azureDeployment: deploymentName,
-  });
+// A harmless, non-functional model used ONLY so the CopilotKit runtime can be
+// constructed (its `agents` map must be non-empty) and can answer the client's
+// initial runtime-info handshake when the user has NOT supplied their own keys.
+// It carries a fake key, so it can never run on our credentials — and the UI
+// blocks real chat requests until valid user keys are provided.
+export function buildPlaceholderModel(): LanguageModel {
+  const openai = createOpenAI({ apiKey: "not-configured" });
+  return openai("gpt-4o-mini");
 }

@@ -5,7 +5,7 @@ import {
 } from "@copilotkit/runtime/v2";
 import { NextRequest, NextResponse } from "next/server";
 import type { LanguageModel } from "ai";
-import { buildModel, buildDefaultModelFromEnv } from "@/customModel";
+import { buildModel, buildPlaceholderModel } from "@/customModel";
 import { AI_HEADERS, type AIProvider, type AIProviderConfig } from "@/lib/ai-config";
 
 // Reconstruct the user's provider config from the forwarded request headers.
@@ -25,41 +25,69 @@ function configFromHeaders(req: NextRequest): AIProviderConfig | null {
   };
 }
 
-// Resolve the model to use for this request: prefer the user's config from
-// headers, otherwise fall back to server env vars (if configured).
+// Resolve the model to use for this request. ONLY the user's bring-your-own
+// credentials (forwarded as request headers) are honored. There is intentionally
+// NO server env-var fallback — the assistant must never run on our keys.
 function resolveModel(req: NextRequest): LanguageModel | null {
   const userConfig = configFromHeaders(req);
-  if (userConfig) {
-    const model = buildModel(userConfig);
-    if (model) return model;
-  }
-  return buildDefaultModelFromEnv();
+  if (!userConfig) return null;
+  return buildModel(userConfig);
 }
 
 export const POST = async (req: NextRequest) => {
-  const model = resolveModel(req);
+  // Diagnostic: log whether the user's AI credentials arrived on this request.
+  const dbgProvider = req.headers.get(AI_HEADERS.provider);
+  const dbgHasKey = Boolean(req.headers.get(AI_HEADERS.apiKey));
+  console.log(
+    `[copilotkit] request — provider=${dbgProvider ?? "(none)"} userKey=${dbgHasKey} ` +
+      `azureDeployment=${req.headers.get(AI_HEADERS.azureDeployment) ?? "-"} ` +
+      `openaiModel=${req.headers.get(AI_HEADERS.openaiModel) ?? "-"}`
+  );
 
-  
-  if (!model) {
+  // Always construct a valid runtime so CopilotKit's initial runtime-info
+  // handshake succeeds. When the user hasn't supplied their own keys we use a
+  // non-functional placeholder model (never our credentials); the UI blocks
+  // real chat requests until valid keys are entered, so it is never invoked.
+  let model: LanguageModel;
+  let usingPlaceholder = false;
+  try {
+    const userModel = resolveModel(req);
+    if (userModel) {
+      model = userModel;
+    } else {
+      model = buildPlaceholderModel();
+      usingPlaceholder = true;
+    }
+  } catch (err) {
+    console.error("[copilotkit] Failed to build model from user config:", err);
+    model = buildPlaceholderModel();
+    usingPlaceholder = true;
+  }
+  if (usingPlaceholder) {
+    console.log("[copilotkit] using placeholder model (no valid user keys on this request)");
+  }
+
+  try {
+    const runtime = new CopilotRuntime({
+      agents: { default: new BuiltInAgent({ model }) },
+    });
+
+    const handler = createCopilotRuntimeHandler({
+      runtime,
+      basePath: "/api/copilotkit",
+      mode: "single-route",
+      cors: false,
+    });
+
+    return handler(req);
+  } catch (err) {
+    console.error("[copilotkit] Runtime handler error:", err);
     return NextResponse.json(
       {
         error:
-          "No AI provider configured. Open the Keys panel and add your Azure or OpenAI credentials.",
+          "The AI request failed. This usually means your API key, deployment, or model name is incorrect. Please verify your credentials in the Keys panel.",
       },
-      { status: 400 }
+      { status: 502 }
     );
   }
-
-  const runtime = new CopilotRuntime({
-    agents: { default: new BuiltInAgent({ model }) },
-  });
-
-  const handler = createCopilotRuntimeHandler({
-    runtime,
-    basePath: "/api/copilotkit",
-    mode: "single-route",
-    cors: false,
-  });
-
-  return handler(req);
 };
