@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Sidebar } from "./sidebar";
 import { EmailList } from "./email-list";
@@ -8,7 +8,11 @@ import { EmailDetail } from "./email-detail";
 import { ComposeForm } from "./compose-form";
 import { MailFilters } from "./mail-filters";
 import { AIAssistant } from "./ai-assistant";
+import { MobileNav } from "./mobile-nav";
+import { UndoToast } from "./undo-toast";
+import { AIProviderSettings } from "./ai-provider-settings";
 import { useMailContext } from "@/lib/mail-context";
+import { useAIConfig } from "@/lib/ai-config-context";
 
 function MainContent() {
   const { currentView } = useMailContext();
@@ -34,14 +38,31 @@ function MainContent() {
 
 export function MailApp() {
   const { fetchInbox } = useMailContext();
+  const { hydrated, isConfigured, openSettings } = useAIConfig();
   const { data: session, status } = useSession();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Fetch inbox on initial login
+  // Fetch inbox on initial login — only once. Do NOT depend on fetchInbox,
+  // whose identity changes when the filter changes (navigating to Sent/Trash),
+  // otherwise this effect would re-run and snap the view back to Inbox.
+  const didInitialFetch = useRef(false);
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && !didInitialFetch.current) {
+      didInitialFetch.current = true;
       fetchInbox();
     }
-  }, [status, fetchInbox]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  // First-time prompt: once logged in and localStorage has been read, if no
+  // provider is configured yet, open the Keys panel so the user can pick one.
+  const didPromptConfig = useRef(false);
+  useEffect(() => {
+    if (status === "authenticated" && hydrated && !isConfigured && !didPromptConfig.current) {
+      didPromptConfig.current = true;
+      openSettings();
+    }
+  }, [status, hydrated, isConfigured, openSettings]);
 
   // Register Gmail push notifications and poll Redis for new emails
   const lastPollTs = useRef(Date.now());
@@ -77,11 +98,42 @@ export function MailApp() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar: hidden on mobile unless open, always visible on md+ */}
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 md:static md:flex md:translate-x-0
+          transition-transform duration-300
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        <Sidebar onClose={() => setSidebarOpen(false)} />
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-hidden flex flex-col">
         <MainContent />
+        {/* Spacer so content isn't hidden behind mobile bottom nav */}
+        <div className="h-16 shrink-0 md:hidden" />
       </main>
+
       <AIAssistant />
+
+      {/* Undo toast */}
+      <UndoToast />
+
+      {/* AI provider keys modal */}
+      <AIProviderSettings />
+
+      {/* Mobile bottom nav */}
+      <MobileNav onMenuOpen={() => setSidebarOpen(true)} />
     </div>
   );
 }

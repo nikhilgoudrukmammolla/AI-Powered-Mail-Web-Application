@@ -42,10 +42,12 @@ export function buildQuery(filter: MailFilter): string {
   if (filter.query) parts.push(filter.query);
   if (filter.from) parts.push(`from:${filter.from}`);
   if (filter.to) parts.push(`to:${filter.to}`);
+  if (filter.subject) parts.push(`subject:${filter.subject}`);
   if (filter.after) parts.push(`after:${filter.after}`);
   if (filter.before) parts.push(`before:${filter.before}`);
   if (filter.isUnread) parts.push("is:unread");
   if (filter.label) parts.push(`label:${filter.label}`);
+  if (filter.category) parts.push(`category:${filter.category}`);
   return parts.join(" ");
 }
 
@@ -263,4 +265,100 @@ export async function markAsRead(accessToken: string, emailId: string): Promise<
       removeLabelIds: ["UNREAD"],
     },
   });
+}
+
+// ---------------- Delete / Trash ----------------
+
+// Move a single email to Trash (recoverable). Uses gmail.modify scope.
+export async function trashEmail(accessToken: string, emailId: string): Promise<void> {
+  const gmail = getGmailClient(accessToken);
+  await gmail.users.messages.trash({ userId: "me", id: emailId });
+}
+
+// Restore a single email from Trash back to its previous labels.
+export async function untrashEmail(accessToken: string, emailId: string): Promise<void> {
+  const gmail = getGmailClient(accessToken);
+  await gmail.users.messages.untrash({ userId: "me", id: emailId });
+}
+
+// Permanently delete a single email (irreversible). Requires https://mail.google.com/ scope.
+export async function deleteEmailPermanently(accessToken: string, emailId: string): Promise<void> {
+  const gmail = getGmailClient(accessToken);
+  await gmail.users.messages.delete({ userId: "me", id: emailId });
+}
+
+// List all message IDs matching a filter (used for bulk operations & count preview).
+export async function listMessageIds(
+  accessToken: string,
+  filter: MailFilter = {},
+  labelIds: string[] = ["INBOX"],
+  limit: number = 500
+): Promise<string[]> {
+  const gmail = getGmailClient(accessToken);
+  const q = buildQuery(filter);
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      q: q || undefined,
+      labelIds: q ? undefined : labelIds,
+      maxResults: Math.min(500, limit - ids.length),
+      pageToken,
+    });
+    for (const m of res.data.messages || []) {
+      if (m.id) ids.push(m.id);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken && ids.length < limit);
+
+  return ids;
+}
+
+// Count how many emails match a filter (preview before deleting).
+export async function countMatching(
+  accessToken: string,
+  filter: MailFilter = {},
+  labelIds: string[] = ["INBOX"]
+): Promise<{ count: number; ids: string[] }> {
+  const ids = await listMessageIds(accessToken, filter, labelIds);
+  return { count: ids.length, ids };
+}
+
+// Bulk move to Trash. batchModify adds the TRASH label to up to 1000 messages at once.
+export async function batchTrash(accessToken: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const gmail = getGmailClient(accessToken);
+  for (let i = 0; i < ids.length; i += 1000) {
+    const chunk = ids.slice(i, i + 1000);
+    await gmail.users.messages.batchModify({
+      userId: "me",
+      requestBody: {
+        ids: chunk,
+        addLabelIds: ["TRASH"],
+        removeLabelIds: ["INBOX", "UNREAD"],
+      },
+    });
+  }
+}
+
+// Bulk permanent delete (irreversible). Requires https://mail.google.com/ scope.
+export async function batchDeletePermanently(accessToken: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const gmail = getGmailClient(accessToken);
+  for (let i = 0; i < ids.length; i += 1000) {
+    const chunk = ids.slice(i, i + 1000);
+    await gmail.users.messages.batchDelete({
+      userId: "me",
+      requestBody: { ids: chunk },
+    });
+  }
+}
+
+// Empty the Trash entirely — permanently deletes everything currently in Trash.
+export async function emptyTrash(accessToken: string): Promise<number> {
+  const ids = await listMessageIds(accessToken, {}, ["TRASH"]);
+  await batchDeletePermanently(accessToken, ids);
+  return ids.length;
 }

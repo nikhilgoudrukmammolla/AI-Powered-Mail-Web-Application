@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Reply, Forward, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
+import { ArrowLeft, Reply, Forward, ChevronDown, ChevronRight, MessageSquare, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMailContext } from "@/lib/mail-context";
@@ -65,7 +65,7 @@ function ThreadMessage({ email, isExpanded, onToggle }: { email: Email; isExpand
 }
 
 export function EmailDetail() {
-  const { selectedEmail, setCurrentView, openCompose, threadMessages } = useMailContext();
+  const { selectedEmail, setCurrentView, openCompose, threadMessages, trashEmail } = useMailContext();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   if (!selectedEmail) {
@@ -97,6 +97,12 @@ export function EmailDetail() {
     );
   };
 
+  const handleDelete = async () => {
+    const id = selectedEmail.id;
+    await trashEmail(id);
+    setCurrentView("inbox");
+  };
+
   const toggleMessage = (id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -116,24 +122,33 @@ export function EmailDetail() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 p-4 border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => setCurrentView("inbox")}>
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-border">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setCurrentView("inbox")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-semibold truncate">{selectedEmail.subject || "(no subject)"}</h2>
+          <h2 className="text-sm sm:text-base font-semibold truncate leading-tight">{selectedEmail.subject || "(no subject)"}</h2>
           {isThread && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <MessageSquare className="h-3 w-3" />
-              {threadMessages.length} messages in this conversation
+              {threadMessages.length} messages
             </p>
           )}
         </div>
-        <Button variant="ghost" size="icon" onClick={handleReply} title="Reply">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={handleReply} title="Reply">
           <Reply className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={handleForward} title="Forward">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={handleForward} title="Forward">
           <Forward className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={handleDelete}
+          title="Move to Trash"
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 
@@ -175,19 +190,19 @@ function SingleEmailView({ email }: { email: Email }) {
 
   return (
     <>
-      <div className="px-4 py-3 border-b border-border">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-sm">{senderName}</p>
-            <p className="text-xs text-muted-foreground">{senderEmail}</p>
+      <div className="px-3 sm:px-4 py-3 border-b border-border">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{senderName}</p>
+            <p className="text-xs text-muted-foreground truncate">{senderEmail}</p>
           </div>
-          <span className="text-xs text-muted-foreground">{timeAgo}</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{timeAgo}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">To: {email.to}</p>
+        <p className="text-xs text-muted-foreground mt-1 truncate">To: {email.to}</p>
       </div>
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <div
-          className="prose prose-sm dark:prose-invert max-w-none"
+          className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: email.body }}
         />
       </div>

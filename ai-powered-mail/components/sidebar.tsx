@@ -1,28 +1,39 @@
 "use client";
 
-import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail } from "lucide-react";
+import { Inbox, Send, PenSquare, LogOut, Sun, Moon, Mail, X, Trash2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMailContext } from "@/lib/mail-context";
 import { useTheme } from "@/lib/theme-context";
+import { useAIConfig } from "@/lib/ai-config-context";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
-export function Sidebar() {
-  const { currentView, fetchInbox, fetchSent, openCompose, setFilter } = useMailContext();
+export function Sidebar({ onClose }: { onClose?: () => void }) {
+  const { currentView, fetchInbox, fetchSent, fetchTrash, openCompose, setFilter } = useMailContext();
   const { theme, toggleTheme } = useTheme();
+  const { openSettings, isConfigured, config } = useAIConfig();
   const { data: session } = useSession();
+
+  const handleNav = (fn: () => void) => {
+    fn();
+    onClose?.();
+  };
 
   return (
     <aside className="w-60 border-r border-border bg-muted/30 flex flex-col h-full">
       <div className="p-4 flex items-center gap-2">
         <Mail className="h-5 w-5 text-primary" />
-        <h1 className="text-lg font-bold text-foreground">AI Mailer</h1>
+        <h1 className="text-lg font-bold text-foreground flex-1">AI Mailer</h1>
+        {/* Close button — mobile only */}
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="px-3 mb-4">
         <Button
           className="w-full justify-start gap-2 cursor-pointer"
-          onClick={() => openCompose()}
+          onClick={() => handleNav(openCompose)}
         >
           <PenSquare className="h-4 w-4" />
           Compose
@@ -33,7 +44,7 @@ export function Sidebar() {
         <Button
           variant={currentView === "inbox" ? "secondary" : "ghost"}
           className={cn("w-full justify-start gap-2 cursor-pointer")}
-          onClick={() => { setFilter({}); fetchInbox({}); }}
+          onClick={() => handleNav(() => { setFilter({}); fetchInbox({}); })}
         >
           <Inbox className="h-4 w-4" />
           Inbox
@@ -41,10 +52,18 @@ export function Sidebar() {
         <Button
           variant={currentView === "sent" ? "secondary" : "ghost"}
           className={cn("w-full justify-start gap-2 cursor-pointer")}
-          onClick={() => { setFilter({}); fetchSent({}); }}
+          onClick={() => handleNav(() => { setFilter({}); fetchSent({}); })}
         >
           <Send className="h-4 w-4" />
           Sent
+        </Button>
+        <Button
+          variant={currentView === "trash" ? "secondary" : "ghost"}
+          className={cn("w-full justify-start gap-2 cursor-pointer")}
+          onClick={() => handleNav(() => { setFilter({}); fetchTrash({}); })}
+        >
+          <Trash2 className="h-4 w-4" />
+          Trash
         </Button>
       </nav>
 
@@ -52,6 +71,21 @@ export function Sidebar() {
         {session?.user?.email && (
           <p className="text-xs text-muted-foreground truncate px-3 mb-2">{session.user.email}</p>
         )}
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground cursor-pointer"
+          onClick={() => handleNav(openSettings)}
+        >
+          <KeyRound className="h-4 w-4" />
+          <span className="text-sm flex-1 text-left">Keys</span>
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full shrink-0",
+              isConfigured ? "bg-emerald-500" : "bg-amber-500"
+            )}
+            title={isConfigured ? `${config?.provider} configured` : "Not configured"}
+          />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

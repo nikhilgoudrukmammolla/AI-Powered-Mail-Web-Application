@@ -7,8 +7,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI-Powered Mail",
-  description: "AI-powered mail client with CopilotKit assistant",
+  title: "Nuromail",
+  description: "Nuromail is an AI-powered email client that helps you manage your emails with ease.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

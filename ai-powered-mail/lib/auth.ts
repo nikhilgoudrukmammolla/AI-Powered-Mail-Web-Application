@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           scope:
-            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify",
+            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://mail.google.com/",
           access_type: "offline",
           prompt: "consent",
         },

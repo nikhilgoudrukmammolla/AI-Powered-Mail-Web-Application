@@ -19,6 +19,14 @@ export interface MailFilter {
   before?: string;
   isUnread?: boolean;
   label?: string;
+  subject?: string;
+  category?: "promotions" | "social" | "updates" | "forums" | "primary";
 }
 
-export type MailView = "inbox" | "sent" | "compose" | "detail";
+export type MailView = "inbox" | "sent" | "trash" | "compose" | "detail";
+
+export interface DeleteResult {
+  deleted: number;
+  permanent: boolean;
+  ids: string[];
+}

@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
   if (searchParams.get("after")) filter.after = searchParams.get("after")!;
   if (searchParams.get("before")) filter.before = searchParams.get("before")!;
   if (searchParams.get("unread") === "true") filter.isUnread = true;
+  if (searchParams.get("subject")) filter.subject = searchParams.get("subject")!;
+  if (searchParams.get("category")) filter.category = searchParams.get("category") as MailFilter["category"];
 
   const label = searchParams.get("label") || "INBOX";
   const maxResults = parseInt(searchParams.get("max") || "20", 10);

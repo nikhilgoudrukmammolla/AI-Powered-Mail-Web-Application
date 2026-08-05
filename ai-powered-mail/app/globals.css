@@ -75,3 +75,27 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* CopilotKit mobile fixes — sit above the 64px bottom nav */
+@media (max-width: 767px) {
+  /* The wrapper that holds the floating button */
+  .copilotKitPopup,
+  .copilotKitSidebar {
+    bottom: 4.5rem !important;
+    right: 1rem !important;
+    z-index: 50 !important;
+  }
+
+  /* The clickable circle button itself */
+  .copilotKitButton {
+    z-index: 50 !important;
+  }
+
+  /* Open sidebar panel — don't cover bottom nav */
+  .copilotKitSidebarContentWrapper {
+    bottom: 4.5rem !important;
+    height: calc(100dvh - 4.5rem) !important;
+    max-height: calc(100dvh - 4.5rem) !important;
+    z-index: 50 !important;
+  }
+}
